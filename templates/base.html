@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>title</title>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% include 'components/account_tray.html' %}
+    {% block body %}{% endblock %}
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

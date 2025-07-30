@@ -1,0 +1,132 @@
+.main-content {
+    flex: 1;
+    position: relative;
+}
+
+header {
+    background-color: #e8e8e8;
+    color: black;
+    padding: 20px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-family: 'Merriweather', serif;
+    color: black;
+}
+
+.hero {
+    text-align: center;
+    padding: 100px 20px;
+    background: #e8e8e8;
+}
+
+.hero h2 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    font-family: 'Merriweather', serif;
+    color: black;
+}
+
+.hero p {
+    font-size: 1.2rem;
+    max-width: 600px;
+    margin: 0 auto 30px;
+    color: black;
+}
+
+#input-card{
+    display: flex;
+    justify-content: flex-end;
+    background-color: rgb(64, 64, 64);;
+    border-radius: 50px;
+    width: 70vw;
+    height: 5rem;
+    align-items: center;
+    transition: 0.3s ease-in-out;
+}
+
+.fixed-input-card{
+    position: absolute;
+    bottom: 5%;
+    transition: 0.3s ease-in-out;
+    z-index: 0;
+}
+form{
+    display: flex;
+    justify-content: center;
+}
+
+textarea {
+    width: 80%;
+    max-width: 600px;
+    height: 120px;
+    padding: 15px;
+    font-size: 1rem;
+    resize: vertical;
+    font-family: 'Segoe UI', sans-serif;
+    color: white;
+    border: none;
+    background: none;
+    resize: none;
+    height: 70%;
+    border-radius:50px;
+    margin: 0 auto 0 10px;
+}
+
+textarea:focus{
+    outline: none;
+}
+
+.chat-btn{
+    background: none;
+    color: white;
+    height: 100%;
+    aspect-ratio: 1/1;
+    border-radius: 100%;
+    border: none;
+    transition: 0.3s ease-in-out;  
+}
+
+.chat-btn:hover{
+    background-color: rgb(70, 70, 70);
+    color: white;
+}
+
+#chat{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+}
+#chat-container{
+    display: flex;
+    flex-direction: column;
+    width: 70vw;
+    overflow-y: scroll;
+    max-height: 75vh;
+    padding-bottom: 60px;
+}
+
+.chat-bubble{
+    background-color: rgb(64, 64, 64);
+    color: white;
+    max-width: 80%;
+    padding: 20px;
+    border-radius: 30px;
+    margin: 8px;
+}
+
+.user-bubble{
+    margin-right: 0;
+    margin-left: auto;
+}
+
+.ai-bubble{
+    margin-right: auto;
+    margin-left: 0;
+}

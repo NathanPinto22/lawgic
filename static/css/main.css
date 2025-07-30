@@ -1,0 +1,32 @@
+html, body {
+    padding: 0;
+    margin: 0;
+    font-family: serif;
+    background-color: #e8e8e8;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+
+footer {
+    position: fixed;
+    bottom: 0;
+    margin: 0 auto 0 auto;
+    text-align: center;
+    padding: 20px;
+    font-size: 0.9rem;
+    color: #666;
+    background-color: none;
+}
+
+.hidden{
+    display: none;
+}
+
+@media (max-width: 768px) {
+    body {
+        flex-direction: column;
+    }
+}

@@ -1,0 +1,50 @@
+
+#sidebar {
+    max-width: 25vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 5;
+    color: white;
+}
+
+
+.sidebar-component {
+    width: 20vw;
+    position: relative;
+    top: 5%;
+    border-radius: 15px;
+    transition: 0.5s ease-in-out;
+    padding: 16px;
+    text-wrap: nowrap;
+    overflow-x: hidden;
+    margin: 12px;
+}
+
+.sidebar-component:hover {
+    background-color: rgb(42, 42, 42);
+}
+
+#sidebar-toggle {
+    position: fixed;
+    left: 0;
+    transition: 0.5s ease-in-out;
+    background: none;
+    border: none;
+    z-index: 10;
+}
+
+.sidebar-component a{
+    text-decoration: none;
+    color: white;
+}
+
+@media (max-width: 768px) {
+    #sidebar {
+        max-width: 80vw;
+    }
+    .sidebar-component {
+        width: 40vw;
+    }
+}
