@@ -1,16 +1,19 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import subprocess
 from flask import Flask, flash, get_flashed_messages, make_response, redirect, render_template, request, jsonify, session
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from langchain_ollama import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
+import requests
 from utils.rag_engine import get_relevant_chunks, get_relevant_history_chunks, update_indexing, extract_text_from_pdf
 from utils.chat_utils import generate_chat_id
 import json
 import bcrypt
 import secrets
 import os
+import time
+
 
 # try:
 #     from openai import OpenAI
@@ -32,16 +35,47 @@ db = client["lawgic"]
 chats = db["chats"]
 users = db["users"]
 users.create_index("email", unique=True)
-sessions = db["sessions"]
+sessions = db["sessions"]   
 
+
+def generate_chat_title(user_query):
+    prompt = f"Give a short title (3 to 7 words) summarizing this message:\n\n{user_query}"
+    response = requests.post(
+        "http://localhost:11434/api/generate",
+        json={"model": "phi", "prompt": prompt, "stream": False}
+    )
+
+    if response.ok:
+        return response.json()['response'].strip().title()
+    else:
+        return "Untitled Chat"
+    
 def getChatList(user_id):
-    return [doc["_id"] for doc in chats.find({"user_id": user_id}, {"_id":1})]
+    return [(doc["_id"], doc["title"]) for doc in chats.find({"user_id": user_id}, {"_id":1, "title":1})]
+
+def getUserFromSessionId(session_id):
+    s = sessions.find_one({"_id":session_id})
+    if s:
+        print("session found")  
+        return s["user"]
+    else:
+        print("session not found")
+        return None
 
 def createSession(resp, user):
+    print("P2")
     session_id = secrets.token_urlsafe(32)
-    sessions.insert_one({"_id":session_id, "user":user["_id"], "created":datetime.utcnow(), "expires":datetime.utcnow()+datetime.timedelta(days=30)})
+    print("P3")
+    sessions.insert_one({"_id":session_id, "user":user["_id"], "created":datetime.utcnow(), "expires":datetime.utcnow() + timedelta(days=30)})
+    print("P4")
     resp.set_cookie("session_id", session_id, httponly=True, secure=True)
-
+    
+def discardSession(session):
+    try:
+        sessions.delete_one({"_id":session["_id"]})
+    except Exception as e:
+        print("Error deleting a session: ", e)
+        
 CONTEXT_FILE = "context_history.json"
 
 def html_format(text):
@@ -90,18 +124,23 @@ def save_context(chatID, query, result):
 # Chat query processing
 @app.route("/chat", methods=["POST"])
 async def chatProcessing():
+    chatID = None
     print("Query processing")
     try:
+        session_id = request.cookies.get("session_id")
         query = request.form.get("query-text")
         chatID = request.form.get("chat-id")
         file = request.files.get("file")
-
+        user_id = getUserFromSessionId(session_id)
         if not chatID:
+            chat_title = generate_chat_title(query)
             while True:
                 chatID = generate_chat_id()
                 try:
                     chats.insert_one({
                         "_id" : chatID,
+                        "user_id":user_id,
+                        "title":chat_title,
                         "history": ""
                     })
                     break
@@ -164,7 +203,8 @@ async def chatProcessing():
 @app.route('/manage-chats')
 
 def manage_chats_page():
-    return render_template("manage-chats.html", chatList = getChatList())
+    session_id = request.cookies.get("session_id")
+    return render_template("manage-chats.html", chatList = getChatList(getUserFromSessionId(session_id)))
 
 @app.route('/sign-up')
 def signup_page():
@@ -185,7 +225,7 @@ def signup():
         lname = request.form.get("lname")
         phno = request.form.get("phone")
         
-        pswd = bcrypt.hashpw(pswd, bcrypt.gensalt())
+        pswd = bcrypt.hashpw(pswd.encode('utf-8'), bcrypt.gensalt())
         
         user = users.find_one({"email":email})
         
@@ -201,54 +241,79 @@ def signup():
             user = users.find_one({"_id":user_id})
             resp = make_response(redirect("/"))
             createSession(resp, user)
+            return resp
         else:
             flash("Email already registered")
             resp = make_response(redirect("/sign-up"))
+            return resp
         
     except Exception as e:
-        flash("User not found. Invalid email")
-        resp = make_response(redirect("/login"))
+        print("Error:", e)
+        resp = make_response(redirect("/sign-up"))
+        return resp
             
 @app.route('/login-acc', methods=["POST"])
 def login():
     try:
         email = request.form.get("email")
         pswd = request.form.get("password")
-        pswd = bcrypt.hashpw(pswd, bcrypt.gensalt())
+        pswd = pswd.encode('utf-8')
         
         user = users.find_one({"email":email})
         user_pswd = user["pswd"]
-        
+        print(bcrypt.checkpw(pswd, user_pswd))
         if(bcrypt.checkpw(pswd, user_pswd)):
+            print("User authenticated")
             resp = make_response(redirect("/"))
-            createSession(resp)
+            print("P1")
+            createSession(resp, user)
+            return resp
         else:
+            print("Email/password mismatch!")
             flash("Email/password mismatch!")
             resp = make_response(redirect("/login"))
+            return resp
     except Exception as e:
-        if e.type == "TypeError":
-            flash("User not found. Invalid email")
-            resp = make_response(redirect("/login"))
+        print("User not found. Invalid email")
+        flash("User not found. Invalid email")
+        print("Error", e)
+        resp = make_response(redirect("/login"))
+        return resp
 
+@app.route('/session-valid', methods=["POST"])
+def session_valid():
+    print("checking session validity")
+    session_id = request.cookies.get("session_id")
+    print(request.cookies)
 
+    if not session_id:
+        return json.dumps({"valid": False, "reason": "Missing session_id"}), 401
+
+    session = sessions.find_one({"_id": session_id})
+
+    if not session:
+        return json.dumps({"valid": False, "reason": "Session not found"}), 401
+
+    if session["expires"] < datetime.utcnow():
+        discardSession(session)
+        return json.dumps({"valid": False, "reason": "Session expired"}), 401
+    print("session found")
+    return json.dumps({"valid": True, "user": str(session["user"])}), 200
+    
 # Landing / existing chat
 @app.route('/')
 @app.route('/<chatID>')
 def index(chatID=""):
 
     session_id = request.cookies.get("session_id")
-    session = sessions.find_one({"_id":session_id})
-    if session:
-        user_id = session["user_id"]
-    else:
-        user_id = ""
 
     if not chatID:
-        return render_template('index.html', chatList = getChatList(user_id))
+        return render_template('index.html', chatList = getChatList(getUserFromSessionId(session_id)))
     
     chat = chats.find_one({"_id":chatID})
     if not chat:
         return "Chat not found"
+    chat_title = chat["title"]
     history = chat["history"]
     userHistory = []
     aiHistory = []
@@ -258,7 +323,7 @@ def index(chatID=""):
             aiHistory.append(exchange.split("AI: ")[1])
         
     zipped = zip(userHistory, aiHistory)
-    return render_template('index.html', pairs = zipped, chatList = getChatList(user_id))
+    return render_template('index.html', pairs = zipped, chatList = getChatList(getUserFromSessionId(session_id)), chat_title=chat_title)
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -3,7 +3,7 @@
     <div class="click-through-box" style="pointer-events: none; width: 100%; height: 10vh;"></div>
     <button class="btn btn-outline-secondary sidebar-component" onclick="window.location.pathname='/'">+ New Chat</button>
     {% for chat in chatList %}
-        <p class="sidebar-component"><a href="/{{chat}}">{{chat}}</a></p>
+        <p class="sidebar-component"><a href="/{{chat[0]}}">{{chat[1]}}</a></p>
     {% endfor %}
 </div>
 

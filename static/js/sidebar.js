@@ -15,6 +15,26 @@ sidebarToggle.addEventListener("click", () => {
   sidebarToggle.style.display = "inline";
 });
 
+// Hide sidebar if not in session
+document.addEventListener("DOMContentLoaded", async () => {
+  const validSession = await sessionValid("sidebar.js");
+  if (!validSession) {
+    sidebar.remove();
+    sidebarToggle.disabled = true;
+  }
+
+  const sidebarComponents =
+    document.getElementsByClassName("sidebar-component");
+  for (const comp of sidebarComponents) {
+    comp.addEventListener("click", () => {
+      const anchor = comp.querySelector("a");
+      if (anchor) {
+        anchor.click();
+      }
+    });
+  }
+});
+
 function hideHero() {
   const hero = document.getElementById("hero");
   if (!hero.classList.contains("hidden")) {

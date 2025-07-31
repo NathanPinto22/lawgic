@@ -1,9 +1,20 @@
-function sessionValid() {
-  return false;
-}
+// function sessionValid() {
+//   fetch("/session-valid", {
+//     method: "POST",
+//     body: "",
+//   })
+//     .then((response) => response.json())
+//     .then((data) => {
+//       console.log(data.valid);
+//       return data.valid;
+//     })
+//     .catch((error) => {
+//       console.error("Error validating session: ", error);
+//       return false;
+//     });
+// }
 
 function toggleClass(element, className) {
-  console.log("toggling");
   if (element.classList.contains(className)) {
     element.classList.remove(className);
   } else {
@@ -12,8 +23,10 @@ function toggleClass(element, className) {
 }
 
 const accTray = document.getElementById("account-tray");
-document.addEventListener("DOMContentLoaded", () => {
-  if (sessionValid()) {
+document.addEventListener("DOMContentLoaded", async () => {
+  const isValid = await sessionValid("account_tray.js");
+  if (isValid) {
+    console.log("Valid Session");
     const profileIcon = document.createElement("div");
     const profileImage = document.createElement("img");
     profileImage.src = "";
@@ -34,13 +47,12 @@ document.addEventListener("DOMContentLoaded", () => {
     profileIcon.classList.add(...["profile-icon"]);
 
     profileIcon.addEventListener("click", () => {
-      console.log("Clicked!");
       toggleClass(optionList, "d-flex");
-      console.log("toggled");
     });
     accTray.appendChild(profileIcon);
     accTray.appendChild(optionList);
   } else {
+    console.log("Invalid Session");
     const signUpBtn = document.createElement("button");
     const loginBtn = document.createElement("button");
 

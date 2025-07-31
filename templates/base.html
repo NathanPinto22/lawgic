@@ -2,7 +2,8 @@
 <html>
 <head>
     <meta charset="UTF-8" />
-    <title>title</title>
+    <title>Lawgic{% block title %}{% endblock %}</title>
+    <script src="{{url_for('static', filename='js/script.js')}}"></script>
     {% block head %}{% endblock %}
 </head>
 <body>

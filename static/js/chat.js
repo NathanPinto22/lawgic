@@ -6,7 +6,6 @@ function adjustLayout() {
     if (inputCard.classList.contains("fixed-input-card")) return;
     inputCard.classList.add("fixed-input-card");
   } else {
-    console.log("Showing hero");
     if (hero.classList.contains("hidden")) hero.classList.remove("hidden");
     if (!inputCard.classList.contains("fixed-input-card")) return;
     inputCard.classList.remove("fixed-input-card");
