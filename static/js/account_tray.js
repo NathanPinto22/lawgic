@@ -40,6 +40,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const opt = document.createElement("a");
       opt.innerText = option.action;
       opt.href = option.link;
+      opt.style.textDecoration = "none";
+      opt.style.color = "white";
       optionList.appendChild(opt);
     }
 

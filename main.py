@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import subprocess
-from flask import Flask, flash, get_flashed_messages, make_response, redirect, render_template, request, jsonify, session
+from flask import Flask, flash, get_flashed_messages, make_response, redirect, render_template, request, jsonify, session, url_for
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from langchain_ollama import OllamaLLM
@@ -13,6 +13,33 @@ import bcrypt
 import secrets
 import os
 import time
+from transformers import pipeline
+# Primary query processing pipeling
+try:
+    flan_legal = pipeline(
+        "text2text-generation",
+        model="nlearn/flan-legal-qa",
+        tokenizer="nlearn/flan-legal-qa",
+        max_new_tokens=200
+    )
+    print("QA model loaded.")
+except Exception as e:
+    print("Failed to load model:", e)
+    flan_legal = None
+
+# Query optimizer processing pipeling
+try:
+    query_optimizer = pipeline("text2text-generation", model="google/flan-t5-base")
+except Exception as e:
+    print("Failed to load model:", e)
+    query_optimizer = None
+
+# History compressor processing pipeling
+try:
+    compressor = pipeline("text2text-generation", model="google/flan-t5-base")
+except Exception as e:
+    print("Failed to load model:", e)
+    query_optimizer = None
 
 
 # try:
@@ -38,6 +65,48 @@ users.create_index("email", unique=True)
 sessions = db["sessions"]   
 
 
+def optimize_query(user_query):
+    prompt = f"Shorten this query while maintaining the key words such as the action to be performed and the topic:\n\n{user_query}"
+    response = requests.post(
+        "http://localhost:11434/api/generate",
+        json={"model": "phi", "prompt": prompt, "stream": False}
+    )
+
+    if response.ok:
+        return response.json()['response'].strip().title()
+    else:
+        return user_query
+    
+    
+
+def summarize_context(context, llama3=None):
+    
+    print(context)
+    if not llama3:
+        summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+        summary = summarizer(context, max_length=300, min_length=30, do_sample=False)
+        print(summary)
+        if summary:
+            return summary
+        else:
+            return context
+    else:
+        template = """
+        Summarize the following legal text in a clean systematic format.
+        Ensure all critical information is retained
+        Text: {text}
+        """
+        
+        prompt = ChatPromptTemplate.from_template(template)
+        
+        chain = prompt | llama3
+        result = chain.invoke({"text":context})
+        print(result.strip())
+        if result.strip():
+            return result.strip()
+        else:
+            return context
+
 def generate_chat_title(user_query):
     prompt = f"Give a short title (3 to 7 words) summarizing this message:\n\n{user_query}"
     response = requests.post(
@@ -49,7 +118,7 @@ def generate_chat_title(user_query):
         return response.json()['response'].strip().title()
     else:
         return "Untitled Chat"
-    
+   
 def getChatList(user_id):
     return [(doc["_id"], doc["title"]) for doc in chats.find({"user_id": user_id}, {"_id":1, "title":1})]
 
@@ -75,6 +144,14 @@ def discardSession(session):
         sessions.delete_one({"_id":session["_id"]})
     except Exception as e:
         print("Error deleting a session: ", e)
+
+def remote_llama3_infer(prompt):
+    try:
+        res = requests.post("https://<your-ngrok-or-api-url>/generate", json={"prompt": prompt})
+        return res.json().get("response", "").strip()
+    except Exception as e:
+        print("Error calling remote model:", e)
+        return "Error generating response."
         
 CONTEXT_FILE = "context_history.json"
 
@@ -149,39 +226,59 @@ async def chatProcessing():
                     continue
         
         template = """
-        You are a professional legal assistant helping users understand Indian laws, especially those applicable in Goa.
-        Be formal, precise, and avoid giving advice beyond the scope of legal explanation.
-        
-        If you're unsure or the query is ambiguous, clearly state that legal advice should be obtained from a qualified lawyer.
-
-        Use the context provided to frame your response. DO NOT hallucinate facts or cite laws unless they are explicitly present in the context.
-
-        Use '**' to enclose bold text in this form **BOLD TEXT**
-
+        You are a professional legal assistant helping users understand Indian laws, especially those applicable in Goa. Be formal, precise, and avoid giving advice beyond the scope of legal explanation. If you're unsure or the query is ambiguous, clearly state that legal advice should be obtained from a qualified lawyer. Use the context provided to frame your response. DO NOT hallucinate facts or cite laws unless they are explicitly present in the context.
         This is the conversation history: {context}
-
+        
         Question: {question}
 
         Answer: 
         """
 
+        optimized_query = optimize_query(query)
+        print("Query: ", optimized_query)
+        
         if file:
             contents = file.read()
             pdf_text = extract_text_from_pdf(contents)
             context_chunks = get_relevant_chunks(query, pdf_text)
         else:
             context_chunks = get_relevant_chunks(query)
+        print(context_chunks)
         
-        model = OllamaLLM(model="llama3")
+        # Ollama llama3 model object
+        llama3 = OllamaLLM(model="llama3")
+        
+        
+        
+        history = load_context(chatID)
+        faiss_context = "\n--\n".join(context_chunks)
+        
+        # llama3 summarization
+        print("Summarizing history...")
+        context = summarize_context(history, llama3)
+        print("Summarizing context...")
+        context += "\n/////\n" + summarize_context(faiss_context, llama3)
+        
+        prompt = f"Summarize this legal conversation, keeping chronological order and main facts:\n\n{history}"
+        context = summarize_context(history)
+        
+        faiss_context = summarize_context(faiss_context)
+        context += "\n/////\n" + faiss_context
+        
+        # llama3(local) method
+        # llama3_query = ChatPromptTemplate.from_template(template)
+        # chain = llama3_query | llama3
+        # result = chain.invoke({"context":context, "question":query})
 
-        prompt = ChatPromptTemplate.from_template(template)
-        
-        chain = prompt | model
-        
-        context = load_context(chatID)
-        context += "\n/////\n" + "\nBACKEND STORED CONTEXT\n" + "\n--\n".join(context_chunks)
-        
-        result = chain.invoke({"context":context, "question":query})
+        # llama3(remote) method
+        final_prompt = template.format(context=context, question=query)
+        result = remote_llama3_infer(final_prompt)
+
+
+        # fine-tuned flan-t5-small method
+        # prompt = template.format(context=context, question=optimized_query)
+        # print(prompt)
+        # result = flan_legal(prompt)[0]["generated_text"]
                 
         result = html_format(result)
         
@@ -299,7 +396,25 @@ def session_valid():
         return json.dumps({"valid": False, "reason": "Session expired"}), 401
     print("session found")
     return json.dumps({"valid": True, "user": str(session["user"])}), 200
-    
+
+# @app.route('/sign-out')
+# def sign_out():
+#     session_id = request.cookies.get("session_id")
+#     sessions.delete_one({"_id":session_id})
+#     return make_response(redirect('/index'))
+
+@app.route('/delete-chat/<chatID>')
+def deleteChat(chatID):
+    session_id = request.cookies.get("session_id")
+    result = chats.delete_one({"_id":chatID})
+    return redirect(url_for("manage-chats"))
+
+@app.route('/sign-out')
+def sign_out():
+    session_id = request.cookies.get("session_id")
+    sessions.delete_one({"_id":session_id})
+    return redirect(url_for('index'))
+
 # Landing / existing chat
 @app.route('/')
 @app.route('/<chatID>')
