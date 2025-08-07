@@ -41,5 +41,3 @@ function hideHero() {
     hero.classList.add("hidden");
   } else return;
 }
-
-// Sidebar population

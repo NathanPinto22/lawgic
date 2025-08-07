@@ -3,4 +3,7 @@ __pycache__/
 *.pyc
 .env
 *.log
+static/docs/
+pyProcessing/models/
+meta/
 Chatbot Tech Stack.docx
